@@ -1,0 +1,340 @@
+---
+title: "Fine tuning SVM"
+author: "niken"
+date: "2024-07-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(survival)
+library(survivalsvm)
+library(openxlsx)
+library(plotrix)
+library(ggplot2)
+library(dplyr)
+library(mlr3verse)
+library(mlr3proba)
+```
+
+```{r}
+data = read_excel("C:/Users/defaultuser0/OneDrive/Documents/Data_FD_SVM.xlsx")
+nrow(data)
+data
+```
+
+```{r}
+# Standardize the data
+data[,-c(1,2)] <- scale(data[,-c(1,2)])
+
+# Check data
+print(data)
+```
+```{r}
+save_norm<-write.xlsx(as.data.frame(data),
+                             "C:/Users/defaultuser0/OneDrive/Documents/hasil_normalisasi.xlsx")
+```
+
+### QUADPROG
+
+### SVM MODEL LINEAR KERNEL
+
+```{r}
+# Create the survival task
+task_lin_quad = as_task_surv(x = data, time = 't', event = 'Y', meth_par = gamma.mu, kernel_type = 'lin_kernel')
+# Define the learner
+learner = lrn("surv.svm", type = 'hybrid', diff.meth = "makediff3", gamma.mu = c(0.1, 0.1), kernel = 'lin_kernel', opt.meth = "quadprog")
+# Define the resampling strategy
+resampling = rsmp("insample")
+# Define the performance measure
+measure = msr('surv.cindex')
+# Define the termination criterion and tuner
+terminator = trm("stagnation")
+tuner = tnr('grid_search')
+```
+
+```{r}
+# Define a smaller and logarithmic search space
+search_space = ps(
+  gamma = p_dbl(0.01, 5),
+  mu = p_dbl(0.01, 5)
+)
+
+# Transform function for the search space
+search_space$trafo = function(x, param_set) {
+  x$gamma.mu = c(x$gamma, x$mu)
+  x$gamma = x$mu = NULL
+  x
+}
+
+# Set the same seed for the tuner
+set.seed(42)
+
+# Initialize the AutoTuner
+auto_tuner = AutoTuner$new(
+  learner = learner,
+  resampling = resampling,
+  measure = measure,
+  terminator = terminator,
+  tuner = tuner,
+  search_space = search_space
+)
+
+# Train the AutoTuner
+auto_tuner$train(task_lin_quad)
+```
+
+
+```{r}
+saveRDS(ssvm_at, "C:/Users/defaultuser0/OneDrive/Documents/quadprog_lin_kernel.rds")
+```
+
+
+### SVM MODEL RBF KERNEL
+
+```{r}
+# Create the survival task
+task_rbf_quad = as_task_surv(x = data, time = 't', event = 'Y', meth_par = gamma.mu, kernel_type = 'rbf_kernel')
+# Define the learner
+learner = lrn("surv.svm", type = 'hybrid', diff.meth = "makediff3", gamma.mu = c(0.1, 0.1), kernel = 'rbf_kernel', opt.meth = "quadprog")
+# Define the resampling strategy
+resampling = rsmp("insample")
+# Define the performance measure
+measure = msr('surv.cindex')
+# Define the termination criterion and tuner
+terminator = trm("stagnation")
+tuner = tnr('grid_search')
+```
+
+```{r}
+# Define a smaller and logarithmic search space
+search_space = ps(
+  gamma = p_dbl(0.01, 5),
+  mu = p_dbl(0.01, 5)
+)
+
+# Transform function for the search space
+search_space$trafo = function(x, param_set) {
+  x$gamma.mu = c(x$gamma, x$mu)
+  x$gamma = x$mu = NULL
+  x
+}
+
+# Set the same seed for the tuner
+set.seed(42)
+
+# Initialize the AutoTuner
+auto_tuner = AutoTuner$new(
+  learner = learner,
+  resampling = resampling,
+  measure = measure,
+  terminator = terminator,
+  tuner = tuner,
+  search_space = search_space
+)
+
+# Train the AutoTuner
+auto_tuner$train(task_rbf_quad)
+```
+
+```{r}
+saveRDS(ssvm_at, "C:/Users/defaultuser0/OneDrive/Documents/quadprog_rbf_kernel.rds")
+```
+
+
+### SVM MODEL Additive KERNEL
+
+```{r}
+# Create the survival task
+task_add_quad = as_task_surv(x = data, time = 't', event = 'Y', meth_par = gamma.mu, kernel_type = 'add_kernel')
+# Define the learner
+learner = lrn("surv.svm", type = 'hybrid', diff.meth = "makediff3", gamma.mu = c(0.1, 0.1), kernel = 'add_kernel', opt.meth = "quadprog")
+# Define the resampling strategy
+resampling = rsmp("insample")
+# Define the performance measure
+measure = msr('surv.cindex')
+# Define the termination criterion and tuner
+terminator = trm("stagnation")
+tuner = tnr('grid_search')
+```
+
+```{r}
+# Define a smaller and logarithmic search space
+search_space = ps(
+  gamma = p_dbl(0.01, 5),
+  mu = p_dbl(0.01, 5)
+)
+
+# Transform function for the search space
+search_space$trafo = function(x, param_set) {
+  x$gamma.mu = c(x$gamma, x$mu)
+  x$gamma = x$mu = NULL
+  x
+}
+
+# Set the same seed for the tuner
+set.seed(42)
+
+# Initialize the AutoTuner
+auto_tuner = AutoTuner$new(
+  learner = learner,
+  resampling = resampling,
+  measure = measure,
+  terminator = terminator,
+  tuner = tuner,
+  search_space = search_space
+)
+
+# Train the AutoTuner
+auto_tuner$train(task_add_quad)
+```
+
+```{r}
+saveRDS(ssvm_at, "C:/Users/defaultuser0/OneDrive/Documents/quadprog_add_kernel.rds")
+```
+
+
+### Prognostik Model SVM Terpilih
+
+```{r}
+lin_ph = readRDS("C:/Users/defaultuser0/OneDrive/Documents/quadprog_lin_kernel.rds")
+rbf_ph=readRDS("C:/Users/defaultuser0/OneDrive/Documents/quadprog_rbf_kernel.rds")
+add_ph=readRDS("C:/Users/defaultuser0/OneDrive/Documents/quadprog_add_kernel.rds")
+
+lin_ph$tuning_result
+rbf_ph$tuning_result
+add_ph$tuning_result
+```
+
+```{r}
+#pred_lin = lin_ph$predict_newdata(data)
+#data_lin<-data.frame(Observasi=pred_lin$row_ids, T=pred_lin$truth, Rank=pred_lin$response)
+#summary(data_lin$Rank)
+#hist(data_lin$Rank)
+```
+
+```{r}
+pred_rbf = rbf_ph$predict_newdata(data)
+data_rbf=data.frame(Observasi=pred_rbf$row_ids, T=pred_rbf$truth, Rank=pred_rbf$response)
+summary(data_rbf$Rank)
+hist(data_rbf$Rank)
+```
+
+```{r}
+#pred_add = add_ph$predict_newdata(data)
+#data_add<-data.frame(Observasi=pred_add$row_ids, T=pred_add$truth, Rank=pred_add$response)
+#summary(data_add$Rank)
+#hist(data_add$Rank)
+```
+
+```{r}
+rbf_rank=write.xlsx(as.data.frame(data_rbf),
+                             "C:/Users/defaultuser0/OneDrive/Documents/rbf_rank_prognostik.xlsx")
+```
+
+```{r}
+data_low=read_excel("C:/Users/defaultuser0/OneDrive/Documents/Hasil Pengelompokan.xlsx", sheet="Low Risk")
+summary(data_low)
+```
+
+
+```{r}
+data_low = data_low %>%
+  mutate(Y = ifelse(Y == 1, "financial distress", "tersensor"))
+
+# Menghitung jumlah masing-masing kategori di kolom Y
+data_summary = data_low %>% 
+  group_by(Y) %>% 
+  summarise(count = n())
+
+# Membuat pie chart
+ggplot(data_summary, aes(x = "", y = count, fill = Y)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y") +
+  theme_void() +
+  labs(title = "Pie Chart Status Tersensor Kelompok Low Risk", fill = "Status") +
+  geom_text(aes(label = paste(Y, count)), 
+            position = position_stack(vjust = 0.5))
+```
+
+
+```{r}
+data_high = read_excel("C:/Users/defaultuser0/OneDrive/Documents/Hasil Pengelompokan.xlsx", sheet="High Risk")
+summary(data_high)
+```
+```{r}
+data_high = data_high %>%
+  mutate(Y = ifelse(Y == 1, "financial distress", "tersensor"))
+
+# Menghitung jumlah masing-masing kategori di kolom Y
+data_summary = data_high %>% 
+  group_by(Y) %>% 
+  summarise(count = n())
+
+# Membuat pie chart
+ggplot(data_summary, aes(x = "", y = count, fill = Y)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y") +
+  theme_void() +
+  labs(title = "Pie Chart Status Tersensor Kelompok High Risk", fill = "Status") +
+  geom_text(aes(label = paste(Y, count)), 
+            position = position_stack(vjust = 0.5))
+```
+
+
+### SAVING C-INDEX MODEL
+
+```{r}
+rbf_ph=readRDS("C:/Users/defaultuser0/OneDrive/Documents/quadprog_rbf_kernel.rds")
+rbf_ph$tuning_result
+rbf_ph
+
+hasil_rbf_ph=write.xlsx(as.data.frame(rbf_ph$archive$data),
+                             "C:/Users/defaultuser0/OneDrive/Documents/hasil_quadprog_rbf_kernel.xlsx")
+```
+
+
+```{r}
+lin_ph=readRDS("C:/Users/defaultuser0/OneDrive/Documents/quadprog_lin_kernel.rds")
+lin_ph$tuning_result
+lin_ph
+
+hasil_lin_ph=write.xlsx(as.data.frame(lin_ph$archive$data),
+                             "C:/Users/defaultuser0/OneDrive/Documents/hasil_quadprog_lin_kernel.xlsx")
+```
+
+
+```{r}
+add_ph=readRDS("C:/Users/defaultuser0/OneDrive/Documents/quadprog_add_kernel.rds")
+add_ph$tuning_result
+add_ph
+
+hasil_add_ph=write.xlsx(as.data.frame(add_ph$archive$data),
+                             "C:/Users/defaultuser0/OneDrive/Documents/hasil_quadprog_add_kernel.xlsx")
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
